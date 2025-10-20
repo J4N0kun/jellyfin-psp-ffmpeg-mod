@@ -23,25 +23,43 @@ echo "→ Création du wrapper FFmpeg PSP..."
 cat > "$FFMPEG_WRAPPER" << 'FFMPEG_WRAPPER'
 #!/bin/bash
 # Wrapper FFmpeg pour forcer H.264 Baseline Profile (PSP)
+# Parse et modifie les arguments pour injecter les options PSP
 
-# Détecter si c'est un transcodage H.264
-if echo "$@" | grep -q "libx264"; then
-    # Forcer Baseline Profile + Level 3.0 + Options PSP
-    # Insérer les options AVANT le fichier de sortie
-    exec /usr/lib/jellyfin-ffmpeg/ffmpeg.original "$@" \
-        -profile:v baseline \
-        -level 3.0 \
-        -bf 0 \
-        -refs 1 \
-        -coder 0 \
-        -g 48 \
-        -sc_threshold 0 \
-        -keyint_min 48 \
-        -x264opts no-8x8dct=1:no-cabac=1
-else
-    # Autres codecs : passer tel quel
+# Si ce n'est pas un transcodage H.264, passer tel quel
+if ! echo "$@" | grep -q "libx264"; then
     exec /usr/lib/jellyfin-ffmpeg/ffmpeg.original "$@"
 fi
+
+# Parser les arguments et injecter nos options PSP
+ARGS=()
+INJECT_DONE=0
+
+for arg in "$@"; do
+    ARGS+=("$arg")
+    
+    # Après "-codec:v:0 libx264", injecter nos options PSP
+    if [ "$arg" = "libx264" ] && [ $INJECT_DONE -eq 0 ]; then
+        # Options PSP critiques pour Baseline Profile
+        ARGS+=("-bf" "0")                    # Pas de B-frames
+        ARGS+=("-refs" "1")                  # 1 seule référence
+        ARGS+=("-coder" "0")                 # CAVLC (pas CABAC)
+        ARGS+=("-g" "48")                    # GOP fixe 48 frames
+        ARGS+=("-sc_threshold" "0")          # Pas de scene detection
+        ARGS+=("-keyint_min" "48")           # Keyframe min = GOP
+        ARGS+=("-partitions" "none")         # Désactiver partitions avancées
+        ARGS+=("-me_method" "hex")           # Motion estimation simple
+        ARGS+=("-subq" "0")                  # Subpel quality minimum
+        ARGS+=("-trellis" "0")               # Pas de trellis
+        ARGS+=("-8x8dct" "0")                # Désactiver 8x8 DCT (Baseline)
+        ARGS+=("-fast-pskip" "1")            # Fast P-skip
+        ARGS+=("-wpredp" "0")                # Pas de weighted prediction
+        ARGS+=("-mixed-refs" "0")            # Pas de mixed refs
+        INJECT_DONE=1
+    fi
+done
+
+# Exécuter FFmpeg avec les arguments modifiés
+exec /usr/lib/jellyfin-ffmpeg/ffmpeg.original "${ARGS[@]}"
 FFMPEG_WRAPPER
 
 # Rendre le wrapper exécutable
