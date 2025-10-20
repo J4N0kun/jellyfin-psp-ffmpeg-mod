@@ -59,9 +59,9 @@ while [ $i -lt $# ]; do
         continue
     fi
     
-    # Supprimer -x264opts conflictuels de Jellyfin
-    if [[ "$arg" =~ ^-x264opts ]]; then
-        echo "  [REMOVE] $arg (conflit avec options PSP)" >> "$LOGFILE"
+    # Supprimer les options conflictuelles de Jellyfin
+    if [[ "$arg" =~ ^-(preset|crf|x264opts|force_key_frames)$ ]]; then
+        echo "  [REMOVE] $arg (remplacé par options PSP)" >> "$LOGFILE"
         SKIP_NEXT=1
         continue
     fi
@@ -89,6 +89,10 @@ while [ $i -lt $# ]; do
         ARGS+=("-fast-pskip" "1")            # Fast P-skip
         ARGS+=("-wpredp" "0")                # Pas de weighted prediction
         ARGS+=("-mixed-refs" "0")            # Pas de mixed refs
+        
+        # Options de qualité PSP (remplacent -preset veryfast -crf 23 de Jellyfin)
+        ARGS+=("-preset" "ultrafast")        # Preset le plus rapide (moins d'options conflictuelles)
+        ARGS+=("-crf" "28")                  # CRF plus élevé pour simplicité
         
         LAST_WAS_LEVEL=0
         continue
