@@ -19,11 +19,22 @@ echo "→ Sauvegarde de l'original FFmpeg..."
 mv "$FFMPEG_WRAPPER" "$FFMPEG_ORIGINAL"
 
 # Créer le wrapper FFmpeg
-echo "→ Création du wrapper FFmpeg PSP..."
+echo "→ Création du wrapper FFmpeg PSP (VERSION DEBUG)..."
 cat > "$FFMPEG_WRAPPER" << 'FFMPEG_WRAPPER'
 #!/bin/bash
 # Wrapper FFmpeg pour forcer H.264 Baseline Profile (PSP)
-# Parse et modifie les arguments pour injecter les options PSP
+# VERSION DEBUG avec logs détaillés
+
+LOGFILE="/tmp/ffmpeg-psp-wrapper.log"
+
+# Logger la commande originale (seulement si c'est du H.264)
+if echo "$@" | grep -q "libx264"; then
+    echo "========================================" >> "$LOGFILE"
+    echo "[$(date)] FFMPEG H.264 DÉTECTÉ" >> "$LOGFILE"
+    echo "COMMANDE ORIGINALE:" >> "$LOGFILE"
+    printf '%s\n' "$@" >> "$LOGFILE"
+    echo "" >> "$LOGFILE"
+fi
 
 # Si ce n'est pas un transcodage H.264, passer tel quel
 if ! echo "$@" | grep -q "libx264"; then
@@ -32,13 +43,34 @@ fi
 
 # Parser les arguments et injecter nos options PSP
 ARGS=()
-INJECT_DONE=0
+SKIP_NEXT=0
 
-for arg in "$@"; do
+i=0
+while [ $i -lt $# ]; do
+    i=$((i + 1))
+    arg="${!i}"
+    
+    # Skip les arguments que nous allons remplacer
+    if [ $SKIP_NEXT -eq 1 ]; then
+        echo "  [SKIP] $arg" >> "$LOGFILE"
+        SKIP_NEXT=0
+        continue
+    fi
+    
+    # Supprimer -x264opts conflictuels de Jellyfin
+    if [[ "$arg" =~ ^-x264opts ]]; then
+        echo "  [REMOVE] $arg (conflit avec options PSP)" >> "$LOGFILE"
+        SKIP_NEXT=1
+        continue
+    fi
+    
+    # Ajouter l'argument actuel
     ARGS+=("$arg")
     
-    # Après "-codec:v:0 libx264", injecter nos options PSP
-    if [ "$arg" = "libx264" ] && [ $INJECT_DONE -eq 0 ]; then
+    # Après "libx264", injecter nos options PSP
+    if [ "$arg" = "libx264" ]; then
+        echo "  [INJECT] Options PSP Baseline après libx264" >> "$LOGFILE"
+        
         # Options PSP critiques pour Baseline Profile
         ARGS+=("-bf" "0")                    # Pas de B-frames
         ARGS+=("-refs" "1")                  # 1 seule référence
@@ -54,9 +86,14 @@ for arg in "$@"; do
         ARGS+=("-fast-pskip" "1")            # Fast P-skip
         ARGS+=("-wpredp" "0")                # Pas de weighted prediction
         ARGS+=("-mixed-refs" "0")            # Pas de mixed refs
-        INJECT_DONE=1
     fi
 done
+
+# Logger la commande modifiée
+echo "COMMANDE MODIFIÉE (PSP Baseline):" >> "$LOGFILE"
+printf '%s ' "${ARGS[@]}" >> "$LOGFILE"
+echo "" >> "$LOGFILE"
+echo "" >> "$LOGFILE"
 
 # Exécuter FFmpeg avec les arguments modifiés
 exec /usr/lib/jellyfin-ffmpeg/ffmpeg.original "${ARGS[@]}"
