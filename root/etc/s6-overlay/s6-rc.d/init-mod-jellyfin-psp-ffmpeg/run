@@ -76,6 +76,7 @@ while [ $i -lt $# ]; do
         echo "  [INJECT] Options PSP Baseline APRÈS -level $arg" >> "$LOGFILE"
         
         # Options PSP critiques pour Baseline Profile
+        # NOTE: NE PAS ajouter -preset/-crf ici car ils viennent APRÈS et écraseraient nos options !
         ARGS+=("-bf" "0")                    # Pas de B-frames
         ARGS+=("-refs" "1")                  # 1 seule référence
         ARGS+=("-coder" "0")                 # CAVLC (pas CABAC)
@@ -90,10 +91,6 @@ while [ $i -lt $# ]; do
         ARGS+=("-fast-pskip" "1")            # Fast P-skip
         ARGS+=("-wpredp" "0")                # Pas de weighted prediction
         ARGS+=("-mixed-refs" "0")            # Pas de mixed refs
-        
-        # Options de qualité PSP (remplacent -preset veryfast -crf 23 de Jellyfin)
-        ARGS+=("-preset" "ultrafast")        # Preset le plus rapide (moins d'options conflictuelles)
-        ARGS+=("-crf" "28")                  # CRF plus élevé pour simplicité
         
         LAST_WAS_LEVEL=0
         continue
