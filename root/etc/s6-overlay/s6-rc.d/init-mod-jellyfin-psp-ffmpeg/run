@@ -42,8 +42,10 @@ if ! echo "$@" | grep -q "libx264"; then
 fi
 
 # Parser les arguments et injecter nos options PSP
+# STRATÉGIE: Collecter tous les args, puis injecter APRÈS -level (en fin de chaîne H.264)
 ARGS=()
 SKIP_NEXT=0
+LAST_WAS_LEVEL=0
 
 i=0
 while [ $i -lt $# ]; do
@@ -64,12 +66,13 @@ while [ $i -lt $# ]; do
         continue
     fi
     
-    # Ajouter l'argument actuel
-    ARGS+=("$arg")
-    
-    # Après "libx264", injecter nos options PSP
-    if [ "$arg" = "libx264" ]; then
-        echo "  [INJECT] Options PSP Baseline après libx264" >> "$LOGFILE"
+    # Détecter si l'argument précédent était "-level"
+    if [ $LAST_WAS_LEVEL -eq 1 ]; then
+        # Ajouter la valeur de level
+        ARGS+=("$arg")
+        
+        # MAINTENANT injecter nos options PSP (après -profile et -level)
+        echo "  [INJECT] Options PSP Baseline APRÈS -level $arg" >> "$LOGFILE"
         
         # Options PSP critiques pour Baseline Profile
         ARGS+=("-bf" "0")                    # Pas de B-frames
@@ -86,6 +89,19 @@ while [ $i -lt $# ]; do
         ARGS+=("-fast-pskip" "1")            # Fast P-skip
         ARGS+=("-wpredp" "0")                # Pas de weighted prediction
         ARGS+=("-mixed-refs" "0")            # Pas de mixed refs
+        
+        LAST_WAS_LEVEL=0
+        continue
+    fi
+    
+    # Ajouter l'argument actuel
+    ARGS+=("$arg")
+    
+    # Détecter "-level" pour injecter APRÈS sa valeur
+    if [[ "$arg" =~ ^-level$ ]] || [[ "$arg" =~ ^-level:v ]]; then
+        LAST_WAS_LEVEL=1
+    else
+        LAST_WAS_LEVEL=0
     fi
 done
 
