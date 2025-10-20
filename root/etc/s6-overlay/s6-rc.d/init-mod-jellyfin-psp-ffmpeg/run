@@ -1,0 +1,53 @@
+#!/usr/bin/with-contenv bash
+# Docker Mod pour Jellyfin PSP - Wrapper FFmpeg Baseline Profile
+
+echo "==================================================="
+echo "PSP Jellyfin Mod: Installation wrapper FFmpeg"
+echo "==================================================="
+
+FFMPEG_ORIGINAL="/usr/lib/jellyfin-ffmpeg/ffmpeg.original"
+FFMPEG_WRAPPER="/usr/lib/jellyfin-ffmpeg/ffmpeg"
+
+# Vérifier si le wrapper est déjà installé
+if [ -f "$FFMPEG_ORIGINAL" ]; then
+    echo "→ Wrapper FFmpeg déjà installé ✅"
+    exit 0
+fi
+
+# Renommer l'original FFmpeg
+echo "→ Sauvegarde de l'original FFmpeg..."
+mv "$FFMPEG_WRAPPER" "$FFMPEG_ORIGINAL"
+
+# Créer le wrapper FFmpeg
+echo "→ Création du wrapper FFmpeg PSP..."
+cat > "$FFMPEG_WRAPPER" << 'FFMPEG_WRAPPER'
+#!/bin/bash
+# Wrapper FFmpeg pour forcer H.264 Baseline Profile (PSP)
+
+# Détecter si c'est un transcodage H.264
+if echo "$@" | grep -q "libx264"; then
+    # Forcer Baseline Profile + Level 3.0 + Options PSP
+    # Insérer les options AVANT le fichier de sortie
+    exec /usr/lib/jellyfin-ffmpeg/ffmpeg.original "$@" \
+        -profile:v baseline \
+        -level 3.0 \
+        -bf 0 \
+        -refs 1 \
+        -coder 0 \
+        -g 48 \
+        -sc_threshold 0 \
+        -keyint_min 48 \
+        -x264opts no-8x8dct=1:no-cabac=1
+else
+    # Autres codecs : passer tel quel
+    exec /usr/lib/jellyfin-ffmpeg/ffmpeg.original "$@"
+fi
+FFMPEG_WRAPPER
+
+# Rendre le wrapper exécutable
+chmod +x "$FFMPEG_WRAPPER"
+
+echo "→ Wrapper FFmpeg installé ✅"
+echo "→ Tous les transcodages H.264 utiliseront Baseline Profile !"
+echo "==================================================="
+
