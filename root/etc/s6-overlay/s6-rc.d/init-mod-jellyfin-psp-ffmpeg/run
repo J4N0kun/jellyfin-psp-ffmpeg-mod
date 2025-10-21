@@ -68,12 +68,15 @@ while [ $i -lt $# ]; do
         continue
     fi
     
-    # REMPLACER -movflags par +faststart (moov au début pour streaming progressif)
+    # MODIFIER -movflags : enlever delay_moov (qui retarde le moov à la fin)
+    # On garde frag_keyframe+empty_moov (moov minimal au début + fragments pour streaming)
     if [[ "$arg" = "-movflags" ]]; then
         i=$((i + 1))
         next_arg="${!i}"
-        echo "  [REPLACE] -movflags $next_arg -> -movflags +faststart (moov en tête)" >> "$LOGFILE"
-        ARGS+=("-movflags" "+faststart")
+        # Enlever delay_moov de la chaîne (utilise sed pour remplacer)
+        modified_movflags=$(echo "$next_arg" | sed 's/+\?delay_moov//g' | sed 's/++/+/g' | sed 's/^+//' | sed 's/+$//')
+        echo "  [REPLACE] -movflags $next_arg -> -movflags $modified_movflags (enlève delay_moov)" >> "$LOGFILE"
+        ARGS+=("-movflags" "$modified_movflags")
         continue
     fi
     
