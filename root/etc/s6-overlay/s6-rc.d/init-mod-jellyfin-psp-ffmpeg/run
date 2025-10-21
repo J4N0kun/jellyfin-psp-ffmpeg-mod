@@ -62,11 +62,25 @@ while [ $i -lt $# ]; do
     # Supprimer les options conflictuelles de Jellyfin
     # NOTE: -x264opts peut être -x264opts:0, -x264opts:1, etc.
     # IMPORTANT: On supprime aussi -maxrate et -bufsize car le mode CBR crée des P-frames de 11 bytes !
-    # IMPORTANT: On supprime -movflags car frag_keyframe crée des fragments MP4 que le client PSP ne gère pas !
+    # IMPORTANT: On supprime -movflags et -f mp4 car on veut du Transport Stream (.ts) sans fragmentation !
     if [[ "$arg" =~ ^-(preset|crf|force_key_frames|maxrate|bufsize|movflags)$ ]] || [[ "$arg" =~ ^-x264opts ]]; then
         echo "  [REMOVE] $arg (remplacé par options PSP)" >> "$LOGFILE"
         SKIP_NEXT=1
         continue
+    fi
+    
+    # Remplacer -f mp4 par -f mpegts
+    if [[ "$arg" = "-f" ]]; then
+        i=$((i + 1))
+        next_arg="${!i}"
+        if [[ "$next_arg" = "mp4" ]]; then
+            echo "  [REPLACE] -f mp4 -> -f mpegts (Transport Stream pour PSP)" >> "$LOGFILE"
+            ARGS+=("-f" "mpegts")
+            continue
+        else
+            ARGS+=("$arg" "$next_arg")
+            continue
+        fi
     fi
     
     # Détecter si l'argument précédent était "-level"
