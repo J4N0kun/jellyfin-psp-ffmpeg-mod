@@ -62,7 +62,8 @@ while [ $i -lt $# ]; do
     # Supprimer les options conflictuelles de Jellyfin
     # NOTE: -x264opts peut être -x264opts:0, -x264opts:1, etc.
     # IMPORTANT: On supprime aussi -maxrate et -bufsize car le mode CBR crée des P-frames de 11 bytes !
-    if [[ "$arg" =~ ^-(preset|crf|force_key_frames|maxrate|bufsize)$ ]] || [[ "$arg" =~ ^-x264opts ]]; then
+    # IMPORTANT: On supprime -movflags car frag_keyframe crée des fragments MP4 que le client PSP ne gère pas !
+    if [[ "$arg" =~ ^-(preset|crf|force_key_frames|maxrate|bufsize|movflags)$ ]] || [[ "$arg" =~ ^-x264opts ]]; then
         echo "  [REMOVE] $arg (remplacé par options PSP)" >> "$LOGFILE"
         SKIP_NEXT=1
         continue
@@ -80,9 +81,9 @@ while [ $i -lt $# ]; do
         ARGS+=("-bf" "0")                    # Pas de B-frames
         ARGS+=("-refs" "1")                  # 1 seule référence
         ARGS+=("-coder" "0")                 # CAVLC (pas CABAC)
-        ARGS+=("-g" "1")                     # GOP=1 : TOUTES I-FRAMES (test si Media Engine rejette P-frames)
+        ARGS+=("-g" "48")                    # GOP fixe 48 frames
         ARGS+=("-sc_threshold" "0")          # Pas de scene detection
-        ARGS+=("-keyint_min" "1")            # Keyframe min = GOP
+        ARGS+=("-keyint_min" "48")           # Keyframe min = GOP
         ARGS+=("-partitions" "none")         # Désactiver partitions avancées
         ARGS+=("-me_method" "hex")           # Motion estimation simple
         ARGS+=("-subq" "2")                  # Subpel quality 2 (éviter P-frames vides)
