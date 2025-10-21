@@ -61,7 +61,8 @@ while [ $i -lt $# ]; do
     
     # Supprimer les options conflictuelles de Jellyfin
     # NOTE: -x264opts peut être -x264opts:0, -x264opts:1, etc.
-    if [[ "$arg" =~ ^-(preset|crf|force_key_frames)$ ]] || [[ "$arg" =~ ^-x264opts ]]; then
+    # IMPORTANT: On supprime aussi -maxrate et -bufsize car le mode CBR crée des P-frames de 11 bytes !
+    if [[ "$arg" =~ ^-(preset|crf|force_key_frames|maxrate|bufsize)$ ]] || [[ "$arg" =~ ^-x264opts ]]; then
         echo "  [REMOVE] $arg (remplacé par options PSP)" >> "$LOGFILE"
         SKIP_NEXT=1
         continue
@@ -76,7 +77,6 @@ while [ $i -lt $# ]; do
         echo "  [INJECT] Options PSP Baseline APRÈS -level $arg" >> "$LOGFILE"
         
         # Options PSP critiques pour Baseline Profile
-        # NOTE: NE PAS ajouter -preset/-crf ici car ils viennent APRÈS et écraseraient nos options !
         ARGS+=("-bf" "0")                    # Pas de B-frames
         ARGS+=("-refs" "1")                  # 1 seule référence
         ARGS+=("-coder" "0")                 # CAVLC (pas CABAC)
@@ -85,12 +85,15 @@ while [ $i -lt $# ]; do
         ARGS+=("-keyint_min" "48")           # Keyframe min = GOP
         ARGS+=("-partitions" "none")         # Désactiver partitions avancées
         ARGS+=("-me_method" "hex")           # Motion estimation simple
-        ARGS+=("-subq" "0")                  # Subpel quality minimum
+        ARGS+=("-subq" "2")                  # Subpel quality 2 (éviter P-frames vides)
         ARGS+=("-trellis" "0")               # Pas de trellis
         ARGS+=("-8x8dct" "0")                # Désactiver 8x8 DCT (Baseline)
-        ARGS+=("-fast-pskip" "1")            # Fast P-skip
+        ARGS+=("-fast-pskip" "0")            # Désactiver fast-pskip (éviter P-frames de 11 bytes)
         ARGS+=("-wpredp" "0")                # Pas de weighted prediction
         ARGS+=("-mixed-refs" "0")            # Pas de mixed refs
+        
+        # Mode qualité CQP au lieu de CBR (éviter P-frames de 11 bytes)
+        ARGS+=("-qp" "23")                   # Qualité fixe (remplace -b:v -maxrate -bufsize)
         
         LAST_WAS_LEVEL=0
         continue
