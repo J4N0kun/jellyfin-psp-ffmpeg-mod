@@ -94,9 +94,9 @@ while [ $i -lt $# ]; do
         ARGS+=("-bf" "0")                    # Pas de B-frames
         ARGS+=("-refs" "1")                  # 1 seule référence
         ARGS+=("-coder" "0")                 # CAVLC (pas CABAC)
-        ARGS+=("-g" "48")                    # GOP fixe 48 frames
+        ARGS+=("-g" "1")                     # GOP=1 (I-frames only, pas de P-frames)
         ARGS+=("-sc_threshold" "0")          # Pas de scene detection
-        ARGS+=("-keyint_min" "48")           # Keyframe min = GOP
+        ARGS+=("-keyint_min" "1")            # Keyframe min = GOP
         ARGS+=("-partitions" "none")         # Désactiver partitions avancées
         ARGS+=("-me_method" "hex")           # Motion estimation simple
         ARGS+=("-subq" "2")                  # Subpel quality 2 (éviter P-frames vides)
