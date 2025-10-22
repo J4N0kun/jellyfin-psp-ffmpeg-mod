@@ -68,13 +68,17 @@ while [ $i -lt $# ]; do
         continue
     fi
     
-    # MODIFIER -movflags : garder SEULEMENT empty_moov (pas de fragmentation)
-    # empty_moov = moov au début, mais pas de fragments moof+mdat (trop complexe pour parser simple)
+    # MODIFIER -movflags : enlever SEULEMENT delay_moov (qui retarde le moov à la fin)
+    # On GARDE frag_keyframe+empty_moov pour le streaming temps réel !
+    # empty_moov = moov au début avec SPS/PPS
+    # frag_keyframe = fragments moof+mdat pour streaming progressif
     if [[ "$arg" = "-movflags" ]]; then
         i=$((i + 1))
         next_arg="${!i}"
-        echo "  [REPLACE] -movflags $next_arg -> -movflags empty_moov (moov au début, pas de fragmentation)" >> "$LOGFILE"
-        ARGS+=("-movflags" "empty_moov")
+        # Enlever delay_moov de la chaîne
+        modified_movflags=$(echo "$next_arg" | sed 's/+\?delay_moov//g' | sed 's/++/+/g' | sed 's/^+//' | sed 's/+$//')
+        echo "  [REPLACE] -movflags $next_arg -> -movflags $modified_movflags (enlève delay_moov)" >> "$LOGFILE"
+        ARGS+=("-movflags" "$modified_movflags")
         continue
     fi
     
