@@ -68,16 +68,18 @@ while [ $i -lt $# ]; do
         continue
     fi
     
-    # FORCER -movflags +faststart : moov au début SANS fragmentation
-    # +faststart = relocate moov atom au début pour streaming progressif
-    # SANS frag_keyframe = un seul mdat continu (pas de moof+mdat multiples)
-    # Note: FFmpeg doit buffer quelques secondes avant d'envoyer, mais c'est acceptable
+    # MODIFIER -movflags : enlever SEULEMENT delay_moov (qui retarde le moov à la fin)
+    # On GARDE frag_keyframe+empty_moov pour le streaming temps réel !
+    # empty_moov = moov au début avec SPS/PPS
+    # frag_keyframe = fragments moof+mdat pour streaming progressif
+    # Avec GOP=48, les fragments sont de ~2 secondes chacun (gérable)
     if [[ "$arg" = "-movflags" ]]; then
         i=$((i + 1))
         next_arg="${!i}"
-        # Remplacer par +faststart seulement
-        echo "  [REPLACE] -movflags $next_arg -> -movflags +faststart (moov début, pas de fragmentation)" >> "$LOGFILE"
-        ARGS+=("-movflags" "+faststart")
+        # Enlever delay_moov de la chaîne
+        modified_movflags=$(echo "$next_arg" | sed 's/+\?delay_moov//g' | sed 's/++/+/g' | sed 's/^+//' | sed 's/+$//')
+        echo "  [REPLACE] -movflags $next_arg -> -movflags $modified_movflags (enlève delay_moov)" >> "$LOGFILE"
+        ARGS+=("-movflags" "$modified_movflags")
         continue
     fi
     
@@ -93,9 +95,9 @@ while [ $i -lt $# ]; do
         ARGS+=("-bf" "0")                    # Pas de B-frames
         ARGS+=("-refs" "1")                  # 1 seule référence
         ARGS+=("-coder" "0")                 # CAVLC (pas CABAC)
-        ARGS+=("-g" "1")                     # GOP=1 (I-frames only, pas de P-frames)
+        ARGS+=("-g" "48")                    # GOP=48 (2 sec @ 24fps, fragments gérables)
         ARGS+=("-sc_threshold" "0")          # Pas de scene detection
-        ARGS+=("-keyint_min" "1")            # Keyframe min = GOP
+        ARGS+=("-keyint_min" "48")           # Keyframe min = GOP
         ARGS+=("-partitions" "none")         # Désactiver partitions avancées
         ARGS+=("-me_method" "hex")           # Motion estimation simple
         ARGS+=("-subq" "2")                  # Subpel quality 2 (éviter P-frames vides)
