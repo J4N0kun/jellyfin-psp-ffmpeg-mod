@@ -68,15 +68,15 @@ while [ $i -lt $# ]; do
         continue
     fi
     
-    # MODIFIER -movflags : FORCER empty_moov SEULEMENT (pas frag_keyframe)
-    # Avec GOP=1, frag_keyframe crée un fragment par I-frame, ce qui pose problème
-    # empty_moov = moov vide au début, puis UN SEUL gros mdat progressif
+    # SUPPRIMER -movflags complètement : avec GOP=1, toute fragmentation pose problème
+    # On utilise un MP4 classique NON FRAGMENTÉ avec moov à la fin
+    # Note: Cela nécessite de transcoder quelques secondes avant que le streaming commence
     if [[ "$arg" = "-movflags" ]]; then
         i=$((i + 1))
         next_arg="${!i}"
-        # Remplacer complètement par empty_moov seulement
-        echo "  [REPLACE] -movflags $next_arg -> -movflags empty_moov (streaming sans fragmentation)" >> "$LOGFILE"
-        ARGS+=("-movflags" "empty_moov")
+        # Supprimer complètement -movflags
+        echo "  [REMOVE] -movflags $next_arg (force MP4 classique non fragmenté)" >> "$LOGFILE"
+        SKIP_NEXT=0  # Déjà skippé avec i++
         continue
     fi
     
