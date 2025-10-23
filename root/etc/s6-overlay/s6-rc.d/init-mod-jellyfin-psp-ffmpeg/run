@@ -68,17 +68,15 @@ while [ $i -lt $# ]; do
         continue
     fi
     
-    # MODIFIER -movflags : enlever SEULEMENT delay_moov (qui retarde le moov à la fin)
-    # On GARDE frag_keyframe+empty_moov pour le streaming temps réel !
-    # empty_moov = moov au début avec SPS/PPS
-    # frag_keyframe = fragments moof+mdat pour streaming progressif
+    # MODIFIER -movflags : FORCER empty_moov SEULEMENT (pas frag_keyframe)
+    # Avec GOP=1, frag_keyframe crée un fragment par I-frame, ce qui pose problème
+    # empty_moov = moov vide au début, puis UN SEUL gros mdat progressif
     if [[ "$arg" = "-movflags" ]]; then
         i=$((i + 1))
         next_arg="${!i}"
-        # Enlever delay_moov de la chaîne
-        modified_movflags=$(echo "$next_arg" | sed 's/+\?delay_moov//g' | sed 's/++/+/g' | sed 's/^+//' | sed 's/+$//')
-        echo "  [REPLACE] -movflags $next_arg -> -movflags $modified_movflags (enlève delay_moov)" >> "$LOGFILE"
-        ARGS+=("-movflags" "$modified_movflags")
+        # Remplacer complètement par empty_moov seulement
+        echo "  [REPLACE] -movflags $next_arg -> -movflags empty_moov (streaming sans fragmentation)" >> "$LOGFILE"
+        ARGS+=("-movflags" "empty_moov")
         continue
     fi
     
