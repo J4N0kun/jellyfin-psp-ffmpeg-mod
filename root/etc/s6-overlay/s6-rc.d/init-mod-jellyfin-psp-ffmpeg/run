@@ -68,15 +68,16 @@ while [ $i -lt $# ]; do
         continue
     fi
     
-    # SUPPRIMER -movflags complètement : avec GOP=1, toute fragmentation pose problème
-    # On utilise un MP4 classique NON FRAGMENTÉ avec moov à la fin
-    # Note: Cela nécessite de transcoder quelques secondes avant que le streaming commence
+    # FORCER -movflags +faststart : moov au début SANS fragmentation
+    # +faststart = relocate moov atom au début pour streaming progressif
+    # SANS frag_keyframe = un seul mdat continu (pas de moof+mdat multiples)
+    # Note: FFmpeg doit buffer quelques secondes avant d'envoyer, mais c'est acceptable
     if [[ "$arg" = "-movflags" ]]; then
         i=$((i + 1))
         next_arg="${!i}"
-        # Supprimer complètement -movflags
-        echo "  [REMOVE] -movflags $next_arg (force MP4 classique non fragmenté)" >> "$LOGFILE"
-        SKIP_NEXT=0  # Déjà skippé avec i++
+        # Remplacer par +faststart seulement
+        echo "  [REPLACE] -movflags $next_arg -> -movflags +faststart (moov début, pas de fragmentation)" >> "$LOGFILE"
+        ARGS+=("-movflags" "+faststart")
         continue
     fi
     
