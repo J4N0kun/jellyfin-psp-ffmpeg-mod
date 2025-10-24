@@ -72,7 +72,7 @@ while [ $i -lt $# ]; do
     # On GARDE frag_keyframe+empty_moov pour le streaming temps réel !
     # empty_moov = moov au début avec SPS/PPS
     # frag_keyframe = fragments moof+mdat pour streaming progressif
-    # Avec GOP=48, les fragments sont de ~2 secondes chacun (gérable)
+    # Avec GOP=1, un fragment par I-frame (petit mais nécessaire car PSP rejette P-frames)
     if [[ "$arg" = "-movflags" ]]; then
         i=$((i + 1))
         next_arg="${!i}"
@@ -95,9 +95,9 @@ while [ $i -lt $# ]; do
         ARGS+=("-bf" "0")                    # Pas de B-frames
         ARGS+=("-refs" "1")                  # 1 seule référence
         ARGS+=("-coder" "0")                 # CAVLC (pas CABAC)
-        ARGS+=("-g" "48")                    # GOP=48 (2 sec @ 24fps, fragments gérables)
+        ARGS+=("-g" "1")                     # GOP=1 (I-frames SEULEMENT - PSP rejette P-frames)
         ARGS+=("-sc_threshold" "0")          # Pas de scene detection
-        ARGS+=("-keyint_min" "48")           # Keyframe min = GOP
+        ARGS+=("-keyint_min" "1")            # Keyframe min = GOP
         ARGS+=("-partitions" "none")         # Désactiver partitions avancées
         ARGS+=("-me_method" "hex")           # Motion estimation simple
         ARGS+=("-subq" "2")                  # Subpel quality 2 (éviter P-frames vides)
