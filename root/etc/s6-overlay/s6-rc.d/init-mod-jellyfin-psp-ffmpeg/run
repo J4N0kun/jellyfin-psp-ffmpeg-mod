@@ -19,27 +19,118 @@ echo "→ Sauvegarde de l'original FFmpeg..."
 mv "$FFMPEG_WRAPPER" "$FFMPEG_ORIGINAL"
 
 # Créer le wrapper FFmpeg
-echo "→ Création du wrapper FFmpeg PSP (VERSION DEBUG)..."
+echo "→ Création du wrapper FFmpeg PSP (H.264 Baseline + MPEG-4 Simple Profile)..."
 cat > "$FFMPEG_WRAPPER" << 'FFMPEG_WRAPPER'
 #!/bin/bash
-# Wrapper FFmpeg pour forcer H.264 Baseline Profile (PSP)
-# VERSION DEBUG avec logs détaillés
+# Wrapper FFmpeg pour PSP
+# - H.264 Baseline Profile
+# - MPEG-4 Simple Profile (STRICT)
 
 LOGFILE="/tmp/ffmpeg-psp-wrapper.log"
 
-# Logger la commande originale (seulement si c'est du H.264)
+# Détecter le type de codec
+IS_H264=0
+IS_MPEG4=0
+
 if echo "$@" | grep -q "libx264"; then
+    IS_H264=1
     echo "========================================" >> "$LOGFILE"
     echo "[$(date)] FFMPEG H.264 DÉTECTÉ" >> "$LOGFILE"
     echo "COMMANDE ORIGINALE:" >> "$LOGFILE"
     printf '%s\n' "$@" >> "$LOGFILE"
     echo "" >> "$LOGFILE"
+elif echo "$@" | grep -q "mpeg4"; then
+    IS_MPEG4=1
+    echo "========================================" >> "$LOGFILE"
+    echo "[$(date)] FFMPEG MPEG-4 DÉTECTÉ" >> "$LOGFILE"
+    echo "COMMANDE ORIGINALE:" >> "$LOGFILE"
+    printf '%s\n' "$@" >> "$LOGFILE"
+    echo "" >> "$LOGFILE"
 fi
 
-# Si ce n'est pas un transcodage H.264, passer tel quel
-if ! echo "$@" | grep -q "libx264"; then
+# Si ce n'est ni H.264 ni MPEG-4, passer tel quel
+if [ $IS_H264 -eq 0 ] && [ $IS_MPEG4 -eq 0 ]; then
     exec /usr/lib/jellyfin-ffmpeg/ffmpeg.original "$@"
 fi
+
+# ============================================================
+# TRAITEMENT SPÉCIFIQUE MPEG-4 SIMPLE PROFILE
+# ============================================================
+if [ $IS_MPEG4 -eq 1 ]; then
+    echo "→ Mode MPEG-4 Simple Profile (STRICT PSP)" >> "$LOGFILE"
+    
+    ARGS=()
+    SKIP_NEXT=0
+    INJECT_AFTER_CODEC=0
+    
+    i=0
+    while [ $i -lt $# ]; do
+        i=$((i + 1))
+        arg="${!i}"
+        
+        if [ $SKIP_NEXT -eq 1 ]; then
+            echo "  [SKIP] $arg" >> "$LOGFILE"
+            SKIP_NEXT=0
+            continue
+        fi
+        
+        # Supprimer les options conflictuelles
+        if [[ "$arg" =~ ^-(preset|crf|force_key_frames|maxrate|bufsize|qmin|qmax)$ ]]; then
+            echo "  [REMOVE] $arg (remplacé par Simple Profile)" >> "$LOGFILE"
+            SKIP_NEXT=1
+            continue
+        fi
+        
+        # Ajouter l'argument
+        ARGS+=("$arg")
+        
+        # Injecter nos options APRÈS -c:v mpeg4
+        if [[ "$arg" = "mpeg4" ]] && [ $INJECT_AFTER_CODEC -eq 0 ]; then
+            echo "  [INJECT] Options MPEG-4 Simple Profile (STRICT PSP)" >> "$LOGFILE"
+            
+            # ===== MPEG-4 SIMPLE PROFILE STRICT =====
+            ARGS+=("-profile:v" "0")         # Profile 0 = Simple Profile
+            ARGS+=("-level" "1")              # Level 1
+            
+            # GOP Structure (Simple Profile)
+            ARGS+=("-g" "12")                 # GOP 12 frames (0.5s @ 24fps)
+            ARGS+=("-bf" "0")                 # PAS de B-frames (Simple Profile)
+            ARGS+=("-sc_threshold" "0")       # Pas de scene cut
+            
+            # Motion Estimation (Simple Profile)
+            ARGS+=("-flags" "+mv4")           # Motion vectors 4
+            ARGS+=("-mbd" "1")                # Simple macroblock decision
+            ARGS+=("-me_method" "epzs")       # Motion estimation simple
+            
+            # Rate Control (éviter bitrate trop bas)
+            ARGS+=("-b:v" "768k")             # Bitrate vidéo
+            ARGS+=("-maxrate" "768k")         # Max bitrate
+            ARGS+=("-bufsize" "1536k")        # Buffer 2x bitrate
+            ARGS+=("-qmin" "2")               # Quantizer min
+            ARGS+=("-qmax" "31")              # Quantizer max
+            
+            # Compliance (STRICT)
+            ARGS+=("-strict" "1")             # Strict compliance
+            ARGS+=("-vtag" "mp4v")            # Force FourCC mp4v
+            
+            # Désactiver features avancées
+            ARGS+=("-mpv_flags" "strict_gop") # GOP strict
+            
+            INJECT_AFTER_CODEC=1
+        fi
+    done
+    
+    echo "COMMANDE MPEG-4 MODIFIÉE:" >> "$LOGFILE"
+    printf '%s ' "${ARGS[@]}" >> "$LOGFILE"
+    echo "" >> "$LOGFILE"
+    echo "" >> "$LOGFILE"
+    
+    exec /usr/lib/jellyfin-ffmpeg/ffmpeg.original "${ARGS[@]}"
+fi
+
+# ============================================================
+# TRAITEMENT H.264 BASELINE PROFILE (code existant)
+# ============================================================
 
 # Parser les arguments et injecter nos options PSP
 # STRATÉGIE: Collecter tous les args, puis injecter APRÈS -level (en fin de chaîne H.264)
