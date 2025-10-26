@@ -1,5 +1,5 @@
 #!/usr/bin/with-contenv bash
-# Docker Mod pour Jellyfin PSP - Wrapper FFmpeg Baseline Profile
+# Docker Mod pour Jellyfin PSP - Wrapper FFmpeg MJPEG optimisé
 
 echo "==================================================="
 echo "PSP Jellyfin Mod: Installation wrapper FFmpeg"
@@ -19,46 +19,24 @@ echo "→ Sauvegarde de l'original FFmpeg..."
 mv "$FFMPEG_WRAPPER" "$FFMPEG_ORIGINAL"
 
 # Créer le wrapper FFmpeg
-echo "→ Création du wrapper FFmpeg PSP (H.264 Baseline + MPEG-4 Simple Profile)..."
+echo "→ Création du wrapper FFmpeg PSP MJPEG..."
 cat > "$FFMPEG_WRAPPER" << 'FFMPEG_WRAPPER'
 #!/bin/bash
-# Wrapper FFmpeg pour PSP
-# - H.264 Baseline Profile
-# - MPEG-4 Simple Profile (STRICT)
+# Wrapper FFmpeg pour PSP - MJPEG optimisé
+# MJPEG = Motion JPEG (succession d'images JPEG)
+# Décodage natif PSP, fiable et performant
 
 LOGFILE="/tmp/ffmpeg-psp-wrapper.log"
 
-# Détecter le type de codec
-IS_H264=0
-IS_MPEG4=0
-
-if echo "$@" | grep -q "libx264"; then
-    IS_H264=1
+# Détecter MJPEG
+if echo "$@" | grep -q "mjpeg"; then
     echo "========================================" >> "$LOGFILE"
-    echo "[$(date)] FFMPEG H.264 DÉTECTÉ" >> "$LOGFILE"
+    echo "[$(date)] FFMPEG MJPEG DÉTECTÉ" >> "$LOGFILE"
     echo "COMMANDE ORIGINALE:" >> "$LOGFILE"
     printf '%s\n' "$@" >> "$LOGFILE"
     echo "" >> "$LOGFILE"
-elif echo "$@" | grep -q "mpeg4"; then
-    IS_MPEG4=1
-    echo "========================================" >> "$LOGFILE"
-    echo "[$(date)] FFMPEG MPEG-4 DÉTECTÉ" >> "$LOGFILE"
-    echo "COMMANDE ORIGINALE:" >> "$LOGFILE"
-    printf '%s\n' "$@" >> "$LOGFILE"
-    echo "" >> "$LOGFILE"
-fi
-
-# Si ce n'est ni H.264 ni MPEG-4, passer tel quel
-if [ $IS_H264 -eq 0 ] && [ $IS_MPEG4 -eq 0 ]; then
-    exec /usr/lib/jellyfin-ffmpeg/ffmpeg.original "$@"
-fi
-
-# ============================================================
-# TRAITEMENT SPÉCIFIQUE MPEG-4 SIMPLE PROFILE
-# ============================================================
-if [ $IS_MPEG4 -eq 1 ]; then
-    echo "→ Mode MPEG-4 Simple Profile (STRICT PSP)" >> "$LOGFILE"
     
+    # Parser et optimiser pour PSP
     ARGS=()
     SKIP_NEXT=0
     INJECT_AFTER_CODEC=0
@@ -69,14 +47,13 @@ if [ $IS_MPEG4 -eq 1 ]; then
         arg="${!i}"
         
         if [ $SKIP_NEXT -eq 1 ]; then
-            echo "  [SKIP] $arg" >> "$LOGFILE"
             SKIP_NEXT=0
             continue
         fi
         
         # Supprimer les options conflictuelles
-        if [[ "$arg" =~ ^-(preset|crf|force_key_frames|maxrate|bufsize|qmin|qmax)$ ]]; then
-            echo "  [REMOVE] $arg (remplacé par Simple Profile)" >> "$LOGFILE"
+        if [[ "$arg" =~ ^-(preset|crf|force_key_frames)$ ]]; then
+            echo "  [REMOVE] $arg (non nécessaire pour MJPEG)" >> "$LOGFILE"
             SKIP_NEXT=1
             continue
         fi
@@ -84,43 +61,33 @@ if [ $IS_MPEG4 -eq 1 ]; then
         # Ajouter l'argument
         ARGS+=("$arg")
         
-        # Injecter nos options APRÈS -c:v mpeg4
-        if [[ "$arg" = "mpeg4" ]] && [ $INJECT_AFTER_CODEC -eq 0 ]; then
-            echo "  [INJECT] Options MPEG-4 Simple Profile (STRICT PSP)" >> "$LOGFILE"
+        # Injecter nos options MJPEG APRÈS -c:v mjpeg
+        if [[ "$arg" = "mjpeg" ]] && [ $INJECT_AFTER_CODEC -eq 0 ]; then
+            echo "  [INJECT] Options MJPEG optimisées PSP" >> "$LOGFILE"
             
-            # ===== MPEG-4 SIMPLE PROFILE STRICT =====
-            ARGS+=("-profile:v" "0")         # Profile 0 = Simple Profile
-            ARGS+=("-level" "1")              # Level 1
+            # ===== MJPEG OPTIMISÉ PSP =====
+            # Qualité JPEG
+            ARGS+=("-q:v" "3")               # Qualité 3 (2-5, plus bas = meilleure qualité)
+            ARGS+=("-qmin" "2")              # Quantizer min
+            ARGS+=("-qmax" "5")              # Quantizer max
             
-            # GOP Structure (Simple Profile)
-            ARGS+=("-g" "12")                 # GOP 12 frames (0.5s @ 24fps)
-            ARGS+=("-bf" "0")                 # PAS de B-frames (Simple Profile)
-            ARGS+=("-sc_threshold" "0")       # Pas de scene cut
+            # Framerate (pour avoir un bitrate raisonnable)
+            ARGS+=("-r" "12")                # 12 fps (fluide pour PSP)
             
-            # Motion Estimation (Simple Profile)
-            ARGS+=("-flags" "+mv4")           # Motion vectors 4
-            ARGS+=("-mbd" "1")                # Simple macroblock decision
-            ARGS+=("-me_method" "epzs")       # Motion estimation simple
+            # Huffman tables optimisées
+            ARGS+=("-huffman" "optimal")     # Tables Huffman optimales
             
-            # Rate Control (éviter bitrate trop bas)
-            ARGS+=("-b:v" "768k")             # Bitrate vidéo
-            ARGS+=("-maxrate" "768k")         # Max bitrate
-            ARGS+=("-bufsize" "1536k")        # Buffer 2x bitrate
-            ARGS+=("-qmin" "2")               # Quantizer min
-            ARGS+=("-qmax" "31")              # Quantizer max
+            # Format de sous-échantillonnage
+            ARGS+=("-pix_fmt" "yuvj420p")    # YUV 4:2:0 JPEG standard
             
-            # Compliance (STRICT)
-            ARGS+=("-strict" "1")             # Strict compliance
-            ARGS+=("-vtag" "mp4v")            # Force FourCC mp4v
-            
-            # Désactiver features avancées
-            ARGS+=("-mpv_flags" "strict_gop") # GOP strict
+            # Pas de B-frames (MJPEG n'en a pas)
+            ARGS+=("-bf" "0")
             
             INJECT_AFTER_CODEC=1
         fi
     done
     
-    echo "COMMANDE MPEG-4 MODIFIÉE:" >> "$LOGFILE"
+    echo "COMMANDE MJPEG MODIFIÉE:" >> "$LOGFILE"
     printf '%s ' "${ARGS[@]}" >> "$LOGFILE"
     echo "" >> "$LOGFILE"
     echo "" >> "$LOGFILE"
@@ -128,112 +95,14 @@ if [ $IS_MPEG4 -eq 1 ]; then
     exec /usr/lib/jellyfin-ffmpeg/ffmpeg.original "${ARGS[@]}"
 fi
 
-# ============================================================
-# TRAITEMENT H.264 BASELINE PROFILE (code existant)
-# ============================================================
-
-# Parser les arguments et injecter nos options PSP
-# STRATÉGIE: Collecter tous les args, puis injecter APRÈS -level (en fin de chaîne H.264)
-ARGS=()
-SKIP_NEXT=0
-LAST_WAS_LEVEL=0
-
-i=0
-while [ $i -lt $# ]; do
-    i=$((i + 1))
-    arg="${!i}"
-    
-    # Skip les arguments que nous allons remplacer
-    if [ $SKIP_NEXT -eq 1 ]; then
-        echo "  [SKIP] $arg" >> "$LOGFILE"
-        SKIP_NEXT=0
-        continue
-    fi
-    
-    # Supprimer les options conflictuelles de Jellyfin
-    # NOTE: -x264opts peut être -x264opts:0, -x264opts:1, etc.
-    # IMPORTANT: On supprime aussi -maxrate et -bufsize car le mode CBR crée des P-frames de 11 bytes !
-    if [[ "$arg" =~ ^-(preset|crf|force_key_frames|maxrate|bufsize)$ ]] || [[ "$arg" =~ ^-x264opts ]]; then
-        echo "  [REMOVE] $arg (remplacé par options PSP)" >> "$LOGFILE"
-        SKIP_NEXT=1
-        continue
-    fi
-    
-    # MODIFIER -movflags : enlever SEULEMENT delay_moov (qui retarde le moov à la fin)
-    # On GARDE frag_keyframe+empty_moov pour le streaming temps réel !
-    # empty_moov = moov au début avec SPS/PPS
-    # frag_keyframe = fragments moof+mdat pour streaming progressif
-    # Avec GOP=1, un fragment par I-frame (petit mais nécessaire car PSP rejette P-frames)
-    if [[ "$arg" = "-movflags" ]]; then
-        i=$((i + 1))
-        next_arg="${!i}"
-        # Enlever delay_moov de la chaîne
-        modified_movflags=$(echo "$next_arg" | sed 's/+\?delay_moov//g' | sed 's/++/+/g' | sed 's/^+//' | sed 's/+$//')
-        echo "  [REPLACE] -movflags $next_arg -> -movflags $modified_movflags (enlève delay_moov)" >> "$LOGFILE"
-        ARGS+=("-movflags" "$modified_movflags")
-        continue
-    fi
-    
-    # Détecter si l'argument précédent était "-level"
-    if [ $LAST_WAS_LEVEL -eq 1 ]; then
-        # Ajouter la valeur de level
-        ARGS+=("$arg")
-        
-        # MAINTENANT injecter nos options PSP (après -profile et -level)
-        echo "  [INJECT] Options PSP Baseline APRÈS -level $arg" >> "$LOGFILE"
-        
-        # Options PSP critiques pour Baseline Profile
-        ARGS+=("-bf" "0")                    # Pas de B-frames
-                    ARGS+=("-refs" "1")                  # 1 seule référence
-                    ARGS+=("-coder" "0")                 # CAVLC (pas CABAC)
-                    ARGS+=("-g" "48")                    # GOP=48 (2 secondes à 24fps)
-                    ARGS+=("-sc_threshold" "0")          # Pas de scene detection
-                    ARGS+=("-keyint_min" "48")           # Keyframe min = GOP
-                    # Force un bitrate plus élevé pour éviter les P-frames trop petites
-                    ARGS+=("-b:v" "1500k")               # Bitrate vidéo 1.5 Mbps (au lieu de 768k)
-                    ARGS+=("-maxrate" "1500k")           # Bitrate max
-                    ARGS+=("-bufsize" "3000k")           # Buffer size (2x bitrate)
-        ARGS+=("-partitions" "none")         # Désactiver partitions avancées
-        ARGS+=("-me_method" "hex")           # Motion estimation simple
-        ARGS+=("-subq" "2")                  # Subpel quality 2 (éviter P-frames vides)
-        ARGS+=("-trellis" "0")               # Pas de trellis
-        ARGS+=("-8x8dct" "0")                # Désactiver 8x8 DCT (Baseline)
-        ARGS+=("-fast-pskip" "0")            # Désactiver fast-pskip (éviter P-frames de 11 bytes)
-        ARGS+=("-wpredp" "0")                # Pas de weighted prediction
-        ARGS+=("-mixed-refs" "0")            # Pas de mixed refs
-        
-        # Note: On utilise maintenant CBR (-b:v -maxrate -bufsize ci-dessus)
-        # au lieu de CQP (-qp) pour avoir un bitrate contrôlé
-        
-        LAST_WAS_LEVEL=0
-        continue
-    fi
-    
-    # Ajouter l'argument actuel
-    ARGS+=("$arg")
-    
-    # Détecter "-level" pour injecter APRÈS sa valeur
-    if [[ "$arg" =~ ^-level$ ]] || [[ "$arg" =~ ^-level:v ]]; then
-        LAST_WAS_LEVEL=1
-    else
-        LAST_WAS_LEVEL=0
-    fi
-done
-
-# Logger la commande modifiée
-echo "COMMANDE MODIFIÉE (PSP Baseline):" >> "$LOGFILE"
-printf '%s ' "${ARGS[@]}" >> "$LOGFILE"
-echo "" >> "$LOGFILE"
-echo "" >> "$LOGFILE"
-
-# Exécuter FFmpeg avec les arguments modifiés
-exec /usr/lib/jellyfin-ffmpeg/ffmpeg.original "${ARGS[@]}"
+# Si ce n'est pas MJPEG, passer tel quel
+exec /usr/lib/jellyfin-ffmpeg/ffmpeg.original "$@"
 FFMPEG_WRAPPER
 
 # Rendre le wrapper exécutable
 chmod +x "$FFMPEG_WRAPPER"
 
-echo "→ Wrapper FFmpeg installé ✅"
-echo "→ Tous les transcodages H.264 utiliseront Baseline Profile !"
+echo "→ Wrapper FFmpeg MJPEG installé ✅"
+echo "→ Tous les transcodages MJPEG seront optimisés pour PSP !"
 echo "==================================================="
 
