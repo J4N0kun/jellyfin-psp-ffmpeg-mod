@@ -1,5 +1,5 @@
 #!/usr/bin/with-contenv bash
-# Docker Mod pour Jellyfin PSP - Wrapper FFmpeg MJPEG optimisé
+# Docker Mod pour Jellyfin PSP - Wrapper FFmpeg H.264 optimisé
 
 echo "==================================================="
 echo "PSP Jellyfin Mod: Installation wrapper FFmpeg"
@@ -19,24 +19,24 @@ echo "→ Sauvegarde de l'original FFmpeg..."
 mv "$FFMPEG_WRAPPER" "$FFMPEG_ORIGINAL"
 
 # Créer le wrapper FFmpeg
-echo "→ Création du wrapper FFmpeg PSP MJPEG..."
+echo "→ Création du wrapper FFmpeg PSP H.264..."
 cat > "$FFMPEG_WRAPPER" << 'FFMPEG_WRAPPER'
 #!/bin/bash
-# Wrapper FFmpeg pour PSP - MJPEG optimisé
-# MJPEG = Motion JPEG (succession d'images JPEG)
-# Décodage natif PSP, fiable et performant
+# Wrapper FFmpeg pour PSP - H.264 optimisé
+# H.264 AVC Base Profile pour Media Engine PSP
+# Décodage hardware via sceMpeg, performances optimales
 
 LOGFILE="/tmp/ffmpeg-psp-wrapper.log"
 
-# Détecter MJPEG
-if echo "$@" | grep -q "mjpeg"; then
+# Détecter H.264
+if echo "$@" | grep -q "h264\|libx264"; then
     echo "========================================" >> "$LOGFILE"
-    echo "[$(date)] FFMPEG MJPEG DÉTECTÉ" >> "$LOGFILE"
+    echo "[$(date)] FFMPEG H.264 DÉTECTÉ" >> "$LOGFILE"
     echo "COMMANDE ORIGINALE:" >> "$LOGFILE"
     printf '%s\n' "$@" >> "$LOGFILE"
     echo "" >> "$LOGFILE"
     
-    # Parser et optimiser pour PSP
+    # Parser et optimiser pour PSP H.264
     ARGS=()
     SKIP_NEXT=0
     INJECT_AFTER_CODEC=0
@@ -51,9 +51,9 @@ if echo "$@" | grep -q "mjpeg"; then
             continue
         fi
         
-        # Supprimer les options conflictuelles avec -q:v (qualité)
-        if [[ "$arg" =~ ^-(preset|crf|force_key_frames|maxrate|bufsize)$ ]] || [[ "$arg" = "-b:v" ]]; then
-            echo "  [REMOVE] $arg (conflit avec -q:v)" >> "$LOGFILE"
+        # Supprimer les options conflictuelles avec notre profil H.264
+        if [[ "$arg" =~ ^-(preset|crf|force_key_frames)$ ]] || [[ "$arg" = "-b:v" ]] || [[ "$arg" = "-maxrate" ]] || [[ "$arg" = "-bufsize" ]]; then
+            echo "  [REMOVE] $arg (conflit avec profil H.264 PSP)" >> "$LOGFILE"
             SKIP_NEXT=1
             continue
         fi
@@ -61,33 +61,66 @@ if echo "$@" | grep -q "mjpeg"; then
         # Ajouter l'argument
         ARGS+=("$arg")
         
-        # Injecter nos options MJPEG APRÈS -c:v mjpeg
-        if [[ "$arg" = "mjpeg" ]] && [ $INJECT_AFTER_CODEC -eq 0 ]; then
-            echo "  [INJECT] Options MJPEG optimisées PSP" >> "$LOGFILE"
+        # Injecter nos options H.264 APRÈS -c:v libx264
+        if [[ "$arg" = "libx264" ]] && [ $INJECT_AFTER_CODEC -eq 0 ]; then
+            echo "  [INJECT] Options H.264 Base Profile PSP" >> "$LOGFILE"
             
-            # ===== MJPEG OPTIMISÉ PSP =====
-            # Qualité JPEG
-            ARGS+=("-q:v" "3")               # Qualité 3 (2-5, plus bas = meilleure qualité)
-            ARGS+=("-qmin" "2")              # Quantizer min
-            ARGS+=("-qmax" "5")              # Quantizer max
+            # ===== H.264 BASE PROFILE PSP =====
+            # Profil et niveau (Base Profile obligatoire pour PSP)
+            ARGS+=("-profile:v" "baseline")   # Base Profile (66)
+            ARGS+=("-level" "3.0")            # Level 3.0
             
-            # Framerate (pour avoir un bitrate raisonnable)
-            ARGS+=("-r" "12")                # 12 fps (fluide pour PSP)
+            # Bitrate et résolution
+            ARGS+=("-b:v" "768k")             # Bitrate vidéo
+            ARGS+=("-maxrate" "768k")         # Bitrate max
+            ARGS+=("-bufsize" "1536k")        # Buffer size
             
-            # Huffman tables optimisées
-            ARGS+=("-huffman" "optimal")     # Tables Huffman optimales
+            # Résolution PSP native
+            ARGS+=("-s" "480x272")            # Résolution PSP
             
-            # Format de sous-échantillonnage
-            ARGS+=("-pix_fmt" "yuvj420p")    # YUV 4:2:0 JPEG standard
+            # Framerate
+            ARGS+=("-r" "24")                 # 24 fps
             
-            # Pas de B-frames (MJPEG n'en a pas)
+            # GOP et keyframes
+            ARGS+=("-g" "48")                 # GOP size (2 secondes à 24fps)
+            ARGS+=("-keyint_min" "48")        # Min GOP
+            ARGS+=("-sc_threshold" "0")       # Désactiver scene cut detection
+            
+            # Pas de B-frames (Base Profile)
             ARGS+=("-bf" "0")
+            ARGS+=("-refs" "1")               # 1 reference frame
+            
+            # Encodage CAVLC (pas CABAC)
+            ARGS+=("-coder" "0")              # CAVLC
+            
+            # Motion estimation
+            ARGS+=("-me_method" "hex")        # Motion estimation
+            ARGS+=("-subq" "5")               # Subpixel quality
+            
+            # Pas de partitions complexes
+            ARGS+=("-partitions" "none")
+            ARGS+=("-trellis" "0")
+            
+            # Deblocking filter
+            ARGS+=("-flags" "+loop")
+            ARGS+=("-cmp" "chroma")
+            
+            # Pas de 8x8 DCT (Base Profile)
+            ARGS+=("-8x8dct" "0")
+            ARGS+=("-fast_pskip" "1")
+            
+            # Pas de weighted prediction
+            ARGS+=("-wpredp" "0")
+            ARGS+=("-mixed_refs" "0")
+            
+            # Fast start pour MP4
+            ARGS+=("-movflags" "+faststart")
             
             INJECT_AFTER_CODEC=1
         fi
     done
     
-    echo "COMMANDE MJPEG MODIFIÉE:" >> "$LOGFILE"
+    echo "COMMANDE H.264 MODIFIÉE:" >> "$LOGFILE"
     printf '%s ' "${ARGS[@]}" >> "$LOGFILE"
     echo "" >> "$LOGFILE"
     echo "" >> "$LOGFILE"
@@ -95,7 +128,7 @@ if echo "$@" | grep -q "mjpeg"; then
     exec /usr/lib/jellyfin-ffmpeg/ffmpeg.original "${ARGS[@]}"
 fi
 
-# Si ce n'est pas MJPEG, passer tel quel
+# Si ce n'est pas H.264, passer tel quel
 exec /usr/lib/jellyfin-ffmpeg/ffmpeg.original "$@"
 FFMPEG_WRAPPER
 
