@@ -51,9 +51,9 @@ if echo "$@" | grep -q "mjpeg"; then
             continue
         fi
         
-        # Supprimer les options conflictuelles
-        if [[ "$arg" =~ ^-(preset|crf|force_key_frames)$ ]]; then
-            echo "  [REMOVE] $arg (non nécessaire pour MJPEG)" >> "$LOGFILE"
+        # Supprimer les options conflictuelles avec -q:v (qualité)
+        if [[ "$arg" =~ ^-(preset|crf|force_key_frames|maxrate|bufsize)$ ]] || [[ "$arg" = "-b:v" ]]; then
+            echo "  [REMOVE] $arg (conflit avec -q:v)" >> "$LOGFILE"
             SKIP_NEXT=1
             continue
         fi
