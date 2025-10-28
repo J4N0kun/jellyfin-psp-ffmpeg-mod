@@ -97,21 +97,9 @@ if echo "$@" | grep -q "h264\|libx264"; then
             ARGS+=("-me_method" "hex")        # Motion estimation
             ARGS+=("-subq" "5")               # Subpixel quality
             
-            # Pas de partitions complexes
-            ARGS+=("-partitions" "none")
-            ARGS+=("-trellis" "0")
-            
             # Deblocking filter
             ARGS+=("-flags" "+loop")
             ARGS+=("-cmp" "chroma")
-            
-            # Pas de 8x8 DCT (Base Profile)
-            ARGS+=("-8x8dct" "0")
-            ARGS+=("-fast_pskip" "1")
-            
-            # Pas de weighted prediction
-            ARGS+=("-wpredp" "0")
-            ARGS+=("-mixed_refs" "0")
             
             # Fast start pour MP4
             ARGS+=("-movflags" "+faststart")
