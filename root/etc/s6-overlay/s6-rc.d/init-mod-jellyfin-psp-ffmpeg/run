@@ -52,7 +52,7 @@ if echo "$@" | grep -q "h264\|libx264"; then
         fi
         
         # Supprimer les options conflictuelles avec notre profil H.264
-        if [[ "$arg" =~ ^-(preset|crf|force_key_frames)$ ]] || [[ "$arg" = "-b:v" ]] || [[ "$arg" = "-maxrate" ]] || [[ "$arg" = "-bufsize" ]]; then
+        if [[ "$arg" =~ ^-(preset|crf|force_key_frames|x264opts|x264opts:0|profile:v:0|movflags)$ ]] || [[ "$arg" = "-b:v" ]] || [[ "$arg" = "-maxrate" ]] || [[ "$arg" = "-bufsize" ]]; then
             echo "  [REMOVE] $arg (conflit avec profil H.264 PSP)" >> "$LOGFILE"
             SKIP_NEXT=1
             continue
