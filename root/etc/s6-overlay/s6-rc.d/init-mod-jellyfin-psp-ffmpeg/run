@@ -101,8 +101,8 @@ if echo "$@" | grep -q "h264\|libx264"; then
             ARGS+=("-flags" "+loop")
             ARGS+=("-cmp" "chroma")
             
-            # Fast start pour MP4
-            ARGS+=("-movflags" "+faststart")
+            # MP4 fragmenté pour streaming (compatible Jellyfin)
+            ARGS+=("-movflags" "frag_keyframe+empty_moov")
             
             INJECT_AFTER_CODEC=1
         fi
