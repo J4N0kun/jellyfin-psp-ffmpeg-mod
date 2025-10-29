@@ -101,8 +101,9 @@ if echo "$@" | grep -q "h264\|libx264"; then
             ARGS+=("-flags" "+loop")
             ARGS+=("-cmp" "chroma")
             
-            # MP4 fragmenté pour streaming (compatible Jellyfin)
-            ARGS+=("-movflags" "frag_keyframe+empty_moov")
+            # MP4 non-fragmenté avec faststart (compatible PSP sceMpeg)
+            # Jellyfin peut gérer le streaming progressif avec faststart
+            ARGS+=("-movflags" "faststart")
             
             INJECT_AFTER_CODEC=1
         fi
